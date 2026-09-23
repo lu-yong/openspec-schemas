@@ -1,0 +1,104 @@
+name: aosp-repo
+version: 1
+description: AOSP owning repository implementation workspace - proposal -> specs -> design -> tasks
+artifacts:
+  - id: proposal
+    generates: proposal.md
+    description: 变更范围与上游前置概要设计指针
+    template: proposal.md
+    instruction: |
+      创建 proposal.md，说明本次变更 WHY 与范围。
+
+      本工作区是实施工作区（ADR-0100 第二段）：从 AOSP 根前置概要设计的
+      交接矩阵派生，记录开发过程的事实。四件 artifact（proposal、specs、
+      design、tasks）必须齐全。
+
+      必须包含的节：
+      - **基本信息**：变更ID（kebab-case）、所属仓库、上游前置概要设计
+        （`AOSP/docs/changes/<upstream-change-id>/`）。上游指针是必填项：
+        没有它就无法核对定稿前置。
+      - **背景与目标**：为什么做、完成判据。动机引用上游，不整段复制。
+      - **受影响主体**：本仓库内直接受影响的 DEL/MOD 主体、能力、边界
+        是否变化、对应 Delta 路径。只列直接主体。
+      - **非目标**：没有则写"无"。
+
+      保持简短（1 页以内）：方案细节属于 design，行为差异属于 specs。
+    requires: []
+
+  - id: specs
+    generates: "specs/**/*.md"
+    description: 记录开发过程事实的 Delta Spec
+    template: spec.md
+    instruction: |
+      为每份能力差异创建一个 Delta spec 文件，路径固定四层：
+      `specs/deliverables/<deliverable-id>/<capability-id>/spec.md` 或
+      `specs/modules/<module-id>/<capability-id>/spec.md`。一份 Delta 只讲
+      一个主体的一组能力。
+
+      结构约定：
+      - 首节必须是 `## 归属`：主体类型（DEL/MOD）、主体ID、主要实现层
+        （MOD 填写）、能力ID、Delta路径、长期归属Spec（本仓库 docs/ 下的
+        八文件路径）、上游前置概要设计指针。
+      - 之后是 `## ADDED Requirements` / `## MODIFIED Requirements` /
+        `## REMOVED Requirements`（仅保留实际使用的段落）。
+      - 每条需求 `### Requirement: <REQ-ID> <名称>`，规范性正文用 SHALL
+        （中文叙述、英文关键词），不用"必须"。
+      - 每条需求至少一个 `#### Scenario:`（正好四级标题），用
+        GIVEN/WHEN/THEN 写可验证例子。
+      - REMOVED 的需求必须写 Reason 和 Migration。
+
+      本 Delta 记录开发过程的事实：实施结果与上游前置概要设计不一致时，
+      以本文件为准，不回改上游。完成后 Delta 合入长期归属的八文件，本文件
+      随工作区冻结为开发记录——不在 openspec/specs/ 维护第二份正文。
+    requires:
+      - proposal
+
+  - id: design
+    generates: design.md
+    description: 实施方案细化
+    template: design.md
+    instruction: |
+      创建 design.md，说明 HOW。
+
+      必须包含的节：
+      - **设计上下文**：变更ID、上游前置概要设计指针、与上游设计的差异
+        （实施中发现的偏差及处置；没有则写"无"）。
+      - **实施决策**：只写本次落地新增的技术决策与取舍。上游概要设计已定
+        的内容引用不复制。
+      - **验证策略**：每项关键决策对应的验证方法。
+
+      保持简短：这是实施层的方案细化，不是前置概要设计的替代品。
+    requires:
+      - proposal
+
+  - id: tasks
+    generates: tasks.md
+    description: 共享执行清单
+    template: tasks.md
+    instruction: |
+      创建 tasks.md——它是共享执行清单：Codex/Qoder 通过 /opsx-apply 执行，
+      Pi 以它为种子回填勾选。多个工具以 checkbox 状态为唯一进度事实。
+
+      格式要求（apply 阶段按 checkbox 解析进度）：
+      - 用 `## N. <组名>` 分组，固定三组：实施、长期文档回写、收尾。
+      - 每条任务必须是 checkbox：`- [ ] N.M 描述并验证 <判据>`。
+        只有装 `x` 的框算完成（`- [x]`）。
+      - 每条任务自带验证判据（测试、命令或可观察行为）。
+
+      固定任务组不得删除：
+      - **长期文档回写**：把 Delta 合入本仓库 docs/ 八文件并运行
+        `python3 tools/validate_docs.py repository <repo>`。
+      - **收尾**：执行 `openspec archive <change-id> --skip-specs` 冻结
+        工作区，确认 `openspec/specs/` 仍为空。
+    requires:
+      - specs
+      - design
+
+apply:
+  requires: [tasks]
+  tracks: tasks.md
+  instruction: |
+    按依赖顺序执行 tasks.md：先实施，后长期文档回写，最后收尾归档。
+    完成一条勾一条；Delta 内容在实施中发现需要修正时，改 specs/ 下的
+    Delta（它是开发过程的事实），不回改上游前置概要设计。
+    全部完成并回写八文件后，执行 `openspec archive <change-id> --skip-specs`。
